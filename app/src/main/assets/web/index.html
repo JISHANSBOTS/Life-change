@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080c13"><title>Trading Strategy Lab</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark"><span>◈</span></div><div><b>TRADING STRATEGY LAB</b><small>QUANT RESEARCH WORKSPACE</small></div></div>
+    <div class="top-actions"><span class="market-state"><i></i> LOCAL MODE</span><button class="icon-btn" id="themeInfo" aria-label="Info">ⓘ</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="nav-caption">WORKSPACE</div>
+      <button class="nav-item active" data-page="dashboard"><span>▦</span>Dashboard</button>
+      <button class="nav-item" data-page="data"><span>▤</span>Historical Data</button>
+      <button class="nav-item" data-page="builder"><span>⌘</span>Strategy Builder</button>
+      <button class="nav-item" data-page="backtest"><span>◷</span>Backtesting Lab</button>
+      <button class="nav-item" data-page="signals"><span>⌁</span>Signal Center</button>
+      <button class="nav-item" data-page="ai"><span>✧</span>AI Providers</button>
+      <button class="nav-item" data-page="system"><span>◉</span>System Control</button>
+      <div class="sidebar-bottom"><div class="engine-mini"><span class="pulse-dot" id="engineDot"></span><div><b id="engineLabel">Engine stopped</b><small>Native Android service</small></div></div><small class="version">VERSION 2.0.0 · RESEARCH ONLY</small></div>
+    </aside>
+    <main class="main" id="main">
+      <section class="page active" id="page-dashboard">
+        <div class="page-heading"><div><div class="eyebrow">OVERVIEW / RESEARCH</div><h1>Research dashboard</h1><p>Your quantitative workspace for BTCUSDT and XAUUSD.</p></div><button class="primary-btn" id="startTop">▶ Start research session</button></div>
+        <div class="notice"><span>ⓘ</span><div><b>Research mode is active.</b> No real-money orders are placed. Live market feeds and AI providers are not connected in this starter build.</div></div>
+        <div class="metric-grid">
+          <article class="metric-card"><div class="metric-label">IMPORTED CANDLES</div><div class="metric-value" id="metricCandles">0</div><div class="metric-foot">Validated local records</div><span class="metric-icon cyan">▤</span></article>
+          <article class="metric-card"><div class="metric-label">DATASETS</div><div class="metric-value" id="metricDatasets">0</div><div class="metric-foot">BTCUSDT · XAUUSD</div><span class="metric-icon blue">◫</span></article>
+          <article class="metric-card"><div class="metric-label">STRATEGIES SAVED</div><div class="metric-value" id="metricStrategies">0</div><div class="metric-foot">Local strategy library</div><span class="metric-icon violet">⌘</span></article>
+          <article class="metric-card"><div class="metric-label">BACKTEST RUNS</div><div class="metric-value" id="metricRuns">0</div><div class="metric-foot">On imported data only</div><span class="metric-icon green">◷</span></article>
+        </div>
+        <div class="content-grid">
+          <article class="panel chart-panel"><div class="panel-head"><div><h2>Market data preview</h2><p>Latest imported close prices</p></div><span class="tag">LOCAL DATA</span></div><canvas id="marketChart" height="220"></canvas><div class="chart-legend"><span><i class="legend-dot"></i> Imported close</span><span id="chartRange">No dataset loaded</span></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Start with your own historical data</p></div></div><button class="action-row" data-go="data"><span class="action-icon cyan">＋</span><span><b>Import market CSV</b><small>OHLCV candle data</small></span><strong>›</strong></button><button class="action-row" data-go="builder"><span class="action-icon violet">⌘</span><span><b>Create a strategy</b><small>EMA crossover template</small></span><strong>›</strong></button><button class="action-row" data-go="backtest"><span class="action-icon green">◷</span><span><b>Run a backtest</b><small>Include fees and slippage</small></span><strong>›</strong></button></article>
+        </div>
+        <article class="panel activity-panel"><div class="panel-head"><div><h2>Research activity</h2><p>Recent actions on this device</p></div><button class="text-btn" id="clearActivity">Clear</button></div><div id="activityList" class="empty-state">No activity yet. Import a CSV to begin.</div></article>
+      </section>
+      <section class="page" id="page-data">
+        <div class="page-heading"><div><div class="eyebrow">DATA ENGINEERING</div><h1>Historical data center</h1><p>Import, validate and store OHLCV candles locally in your WebView database.</p></div><span class="tag green-tag">ON-DEVICE</span></div>
+        <div class="notice"><span>ⓘ</span><div>Expected columns: <b>timestamp, open, high, low, close, volume</b>. Timestamp may be ISO-8601 or Unix milliseconds. Data is stored in this app's WebView IndexedDB. Keep a separate CSV backup.</div></div>
+        <div class="panel import-panel"><div class="upload-zone" id="dropZone"><div class="upload-symbol">⇧</div><h2>Import historical candles</h2><p>Choose a CSV file from your device. Large files are read in chunks.</p><input type="file" id="csvFile" accept=".csv,text/csv" hidden><button class="primary-btn" id="chooseCsv">Choose CSV file</button><small>CSV only · avoid files larger than available device storage</small></div>
+          <div class="import-options"><label>Market<select id="market"><option>BTCUSDT</option><option>XAUUSD</option></select></label><label>Timeframe<select id="timeframe"><option>1m</option><option>5m</option><option selected>15m</option><option>30m</option><option>1h</option><option>4h</option><option>1d</option></select></label><label>Source<input id="source" value="User CSV" maxlength="40"></label></div>
+          <div class="progress-wrap" id="importProgress" hidden><div class="progress-meta"><b id="progressLabel">Importing…</b><span id="progressPct">0%</span></div><div class="progress-track"><i id="progressBar"></i></div></div>
+          <div id="importMessage" class="inline-message">No import running.</div>
+        </div>
+        <div class="panel"><div class="panel-head"><div><h2>Stored datasets</h2><p>Dataset metadata and record counts</p></div><button class="text-btn" id="refreshData">Refresh</button></div><div id="datasetList" class="empty-state">No datasets imported.</div></div>
+      </section>
+      <section class="page" id="page-builder">
+        <div class="page-heading"><div><div class="eyebrow">RULE-BASED RESEARCH</div><h1>Strategy builder</h1><p>Define a reproducible strategy template. This is not investment advice.</p></div></div>
+        <div class="builder-grid"><div class="panel"><div class="panel-head"><div><h2>EMA crossover</h2><p>Long when fast EMA crosses above slow EMA; exit on reverse cross.</p></div><span class="tag">TEMPLATE</span></div>
+          <label class="field">Strategy name<input id="strategyName" value="EMA Trend Cross" maxlength="60"></label>
+          <div class="two-fields"><label class="field">Fast EMA<input id="fastEma" type="number" min="2" max="200" value="12"></label><label class="field">Slow EMA<input id="slowEma" type="number" min="3" max="500" value="26"></label></div>
+          <div class="two-fields"><label class="field">Stop loss (%)<input id="stopLoss" type="number" min="0" max="50" step="0.1" value="2"></label><label class="field">Take profit (%)<input id="takeProfit" type="number" min="0" max="100" step="0.1" value="4"></label></div>
+          <button class="primary-btn full-btn" id="saveStrategy">Save strategy definition</button><div id="strategyMessage" class="inline-message">Strategy definitions are saved locally.</div>
+        </div><div class="panel"><div class="panel-head"><div><h2>Saved strategies</h2><p>Stored on this device</p></div></div><div id="strategyList" class="empty-state">No strategies saved.</div></div></div>
+      </section>
+      <section class="page" id="page-backtest">
+        <div class="page-heading"><div><div class="eyebrow">HISTORICAL SIMULATION</div><h1>Backtesting lab</h1><p>Run a basic EMA crossover simulation on imported candles.</p></div><span class="tag amber-tag">LONG ONLY V1</span></div>
+        <div class="notice warning"><span>⚠</span><div>Backtest output depends on CSV quality and the selected assumptions. This initial engine uses close-to-close fills, fixed fees and slippage, and a single position. It is not a broker-grade execution simulator.</div></div>
+        <div class="panel"><div class="two-fields"><label class="field">Dataset<select id="backtestDataset"><option value="">No datasets available</option></select></label><label class="field">Strategy<select id="backtestStrategy"><option value="">No strategies available</option></select></label></div><div class="two-fields"><label class="field">Fee (bps per side)<input id="feeBps" type="number" value="6" min="0" max="500"></label><label class="field">Slippage (bps per side)<input id="slippageBps" type="number" value="2" min="0" max="500"></label></div><label class="field">Starting capital<input id="capital" type="number" value="10000" min="1"></label><button class="primary-btn" id="runBacktest">▶ Run backtest</button><div id="backtestMessage" class="inline-message">Select a dataset and strategy to run.</div></div>
+        <div id="backtestResults" hidden><div class="metric-grid result-grid"><article class="metric-card"><div class="metric-label">NET RETURN</div><div class="metric-value" id="btReturn">—</div></article><article class="metric-card"><div class="metric-label">WIN RATE</div><div class="metric-value" id="btWin">—</div></article><article class="metric-card"><div class="metric-label">PROFIT FACTOR</div><div class="metric-value" id="btPf">—</div></article><article class="metric-card"><div class="metric-label">MAX DRAWDOWN</div><div class="metric-value" id="btDd">—</div></article></div><div class="panel"><div class="panel-head"><div><h2>Equity curve</h2><p>Simulated account value</p></div><span class="tag">BACKTEST</span></div><canvas id="equityChart" height="210"></canvas><div id="btDetails" class="result-details"></div></div></div>
+      </section>
+      <section class="page" id="page-signals"><div class="page-heading"><div><div class="eyebrow">PAPER RESEARCH</div><h1>Signal center</h1><p>Signal generation is not connected until a validated strategy and fresh market feed are available.</p></div><span class="tag amber-tag">NO LIVE FEED</span></div><div class="panel empty-state large-empty"><div class="empty-icon">⌁</div><h2>No live signals</h2><p>Import candles and run a backtest first. Live WebSocket market feeds and push signal monitoring are not implemented in this package version.</p></div></section>
+      <section class="page" id="page-ai"><div class="page-heading"><div><div class="eyebrow">MODEL CONNECTIVITY</div><h1>AI provider manager</h1><p>Provider adapters are reserved for the next integration phase.</p></div><span class="tag amber-tag">NOT CONNECTED</span></div><div class="notice warning"><span>⚠</span><div>Do not paste API keys into this web dashboard. A secure native Keystore-backed credential vault and provider-specific network adapters must be implemented before enabling Gemini, Groq or Cerebras.</div></div><div class="provider-grid"><article class="provider-card"><div class="provider-logo">G</div><div><b>Google Gemini</b><small>Adapter not configured</small></div><span class="status-pill off">Offline</span></article><article class="provider-card"><div class="provider-logo">Gr</div><div><b>Groq</b><small>Adapter not configured</small></div><span class="status-pill off">Offline</span></article><article class="provider-card"><div class="provider-logo">C</div><div><b>Cerebras</b><small>Adapter not configured</small></div><span class="status-pill off">Offline</span></article></div></section>
+      <section class="page" id="page-system"><div class="page-heading"><div><div class="eyebrow">ANDROID NATIVE ENGINE</div><h1>System control</h1><p>Manage the user-visible foreground research session.</p></div></div><div class="panel system-card"><div class="system-status"><span class="pulse-dot" id="systemDot"></span><div><b id="systemState">Checking service…</b><small>Android foreground service</small></div></div><div class="system-actions"><button class="primary-btn" id="startSystem">▶ Start session</button><button class="secondary-btn" id="stopSystem">■ Stop session</button></div><div class="divider"></div><div class="system-row"><span>Application version</span><b id="appVersion">2.0.0</b></div><div class="system-row"><span>Local database</span><b id="dbState">Opening…</b></div><div class="system-row"><span>Background task recovery</span><b class="muted-value">Not yet implemented</b></div><div class="system-row"><span>Device restart recovery</span><b class="muted-value">Not yet implemented</b></div></div><div class="notice"><span>ⓘ</span><div>Android may stop background work due to battery, memory or system policy. The foreground service displays an ongoing notification, but it does not run while the phone is powered off and cannot guarantee survival after force-stop.</div></div></section>
+    </main>
+  </div>
+  <nav class="mobile-nav"><button class="active" data-page="dashboard">▦<small>Home</small></button><button data-page="data">▤<small>Data</small></button><button data-page="builder">⌘<small>Build</small></button><button data-page="backtest">◷<small>Test</small></button><button data-page="system">◉<small>System</small></button></nav>
+</div>
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body></html>
