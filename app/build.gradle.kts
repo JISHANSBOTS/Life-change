@@ -1,5 +1,4 @@
-import org.gradle.api.tasks.compile.JavaCompile
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -18,27 +17,16 @@ android {
         versionName = "2.0.0"
     }
 
-    // Java and Kotlin must emit the same bytecode level.
+    // Android Gradle Plugin uses these settings for Java compilation.
+    // Do not configure JavaCompile.options.release in an Android module.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
-// Enforce JVM 17 on every Java/Kotlin compile task in this module,
-// including tasks created by Android Gradle Plugin.
-tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
-    options.release.set(17)
-}
-
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
