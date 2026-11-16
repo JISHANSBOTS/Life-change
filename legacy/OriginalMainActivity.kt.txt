@@ -1,0 +1,436 @@
+package com.example.htmlbackgroundrunner
+
+import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.OpenableColumns
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.webkit.*
+import android.widget.*
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.text.InputType
+import android.content.Context
+
+class MainActivity : Activity() {
+    private lateinit var editor: EditText
+    private lateinit var web: WebView
+    private lateinit var status: TextView
+    private lateinit var statusDot: View
+    private lateinit var errorPanel: TextView
+    private lateinit var webPageSection: LinearLayout
+    private lateinit var controlsSection: LinearLayout
+    private lateinit var webTab: TextView
+    private lateinit var controlsTab: TextView
+    private lateinit var projectName: TextView
+    private var loadedName: String? = null
+    private var pulseAnimator: ValueAnimator? = null
+    private val prefs by lazy { getSharedPreferences("project", MODE_PRIVATE) }
+    private val bg = Color.rgb(9, 13, 23)
+    private val panel = Color.rgb(19, 27, 43)
+    private val panel2 = Color.rgb(25, 36, 55)
+    private val accent = Color.rgb(76, 145, 255)
+    private val mint = Color.rgb(61, 220, 165)
+    private val muted = Color.rgb(145, 161, 184)
+    private val pickHtml = 100
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        buildUi()
+        editor.setText(prefs.getString("html", "") ?: "")
+        loadedName = prefs.getString("name", null)
+        projectName.text = loadedName ?: "No HTML file selected"
+        refreshStatus()
+        if (savedInstanceState == null && loadedName != null) {
+            showTab(false)
+            if (RunnerService.isRunning(this)) runHtml()
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9)
+        }
+    }
+
+    private fun buildUi() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(10), dp(16), dp(12))
+            setBackgroundColor(bg)
+        }
+        setContentView(root)
+
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(14))
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        brand.addView(label("HTML RUNNER", 11f, muted, true))
+        brand.addView(label("Control Center", 25f, Color.WHITE, true))
+        top.addView(brand)
+        val livePill = TextView(this).apply {
+            text = "●  LOCAL APP"; textSize = 10f; setTextColor(mint); typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(11), dp(8), dp(11), dp(8)); background = strokeBg(mint, 30)
+        }
+        top.addView(livePill)
+        root.addView(top)
+
+        val projectCard = card()
+        val projectRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val icon = TextView(this).apply {
+            text = "</>"; textSize = 17f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER; background = rounded(accent, 12); layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+        }
+        projectRow.addView(icon)
+        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(11), 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        info.addView(label("CURRENT PROJECT", 10f, muted, true))
+        projectName = label("No HTML file selected", 14f, Color.WHITE, true)
+        info.addView(projectName)
+        projectRow.addView(info)
+        projectCard.addView(projectRow)
+        root.addView(projectCard)
+
+        val tabs = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = rounded(panel, 14)
+        }
+        webTab = tabLabel("▣   Web Page", true)
+        controlsTab = tabLabel("⚙   Controls", false)
+        webTab.layoutParams = LinearLayout.LayoutParams(0, dp(45), 1f)
+        controlsTab.layoutParams = LinearLayout.LayoutParams(0, dp(45), 1f)
+        webTab.setOnClickListener { showTab(false) }
+        controlsTab.setOnClickListener { showTab(true) }
+        tabs.addView(webTab); tabs.addView(controlsTab)
+        root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13); bottomMargin = dp(10) })
+
+        val content = FrameLayout(this)
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        webPageSection = buildWebPageSection()
+        controlsSection = buildControlsSection()
+        content.addView(webPageSection, FrameLayout.LayoutParams(-1, -1))
+        content.addView(controlsSection, FrameLayout.LayoutParams(-1, -1))
+        controlsSection.visibility = View.GONE
+        refreshStatus()
+    }
+
+    private fun buildWebPageSection(): LinearLayout {
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(2), 0, dp(12)) }
+        val uploadCard = card()
+        uploadCard.addView(label("WEBSITE FILE", 11f, muted, true))
+        uploadCard.addView(label("Upload or edit your HTML", 18f, Color.WHITE, true))
+        uploadCard.addView(label("Choose an .html file or paste your own code below.", 12f, muted, false))
+        val uploadRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        uploadRow.addView(actionButton("↑  Upload HTML", accent) { chooseHtml() }, weighted())
+        uploadRow.addView(actionButton("Paste / Edit", panel2) { editor.requestFocus(); Toast.makeText(this@MainActivity, "Paste or edit your HTML below", Toast.LENGTH_SHORT).show() }, weighted())
+        uploadCard.addView(uploadRow)
+        body.addView(uploadCard)
+
+        val editorCard = card()
+        editorCard.addView(label("HTML CODE EDITOR", 11f, muted, true))
+        editor = EditText(this).apply {
+            hint = "Paste HTML, CSS and JavaScript here…"
+            setHintTextColor(0xff71819a.toInt()); setTextColor(0xffe7efff.toInt())
+            textSize = 12f; typeface = Typeface.MONOSPACE
+            gravity = Gravity.TOP or Gravity.START
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(Color.rgb(10, 16, 28), 10)
+            minLines = 5
+        }
+        editorCard.addView(editor, LinearLayout.LayoutParams(-1, dp(150)))
+        val editorActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        editorActions.addView(actionButton("Save Code", panel2) { saveProject(); Toast.makeText(this@MainActivity, "Project saved", Toast.LENGTH_SHORT).show() }, weighted())
+        editorActions.addView(actionButton("Run Website  ▶", mint) { saveProject(); runHtml(); showTab(false) }, weighted())
+        editorCard.addView(editorActions)
+        body.addView(editorCard)
+
+        val previewCard = card()
+        val previewHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        previewHeader.addView(label("LIVE WEBSITE PREVIEW", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        val reload = actionButton("↻ Reload", panel2) { reloadWeb() }
+        previewHeader.addView(reload)
+        previewCard.addView(previewHeader)
+        web = WebView(this).apply {
+            setBackgroundColor(Color.WHITE)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = true
+            settings.loadsImagesAutomatically = true
+            settings.blockNetworkLoads = false
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            webViewClient = object : WebViewClient() {
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                    if (request.isForMainFrame) showError("Unable to load HTML: ${error.description}")
+                }
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                    addError("HTTP ${errorResponse.statusCode}: ${request.url}")
+                }
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                    addError("${message.message()} (line ${message.lineNumber()})")
+                    return true
+                }
+                override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                    android.app.AlertDialog.Builder(this@MainActivity).setMessage(message).setPositiveButton("OK") { _, _ -> result?.confirm() }.setOnCancelListener { result?.cancel() }.show()
+                    return true
+                }
+            }
+        }
+        previewCard.addView(web, LinearLayout.LayoutParams(-1, dp(330)))
+        body.addView(previewCard)
+        scroll.addView(body)
+        column.addView(scroll)
+        return column
+    }
+
+    private fun buildControlsSection(): LinearLayout {
+        val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(2), 0, dp(12)) }
+
+        val statusCard = card()
+        val statusHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        statusDot = View(this).apply { background = rounded(muted, 50); layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)) }
+        statusHeader.addView(statusDot)
+        status = label("Stopped", 19f, Color.WHITE, true)
+        status.setPadding(dp(10), 0, 0, 0)
+        statusHeader.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
+        statusCard.addView(label("RUN SESSION", 11f, muted, true))
+        statusCard.addView(statusHeader)
+        statusCard.addView(label("Control your local HTML runner session. A foreground notification is shown while a session is requested.", 12f, muted, false))
+        val startStop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        startStop.addView(actionButton("▶  START RUN", mint) { runHtml() }, weighted())
+        startStop.addView(actionButton("■  STOP RUN", Color.rgb(186, 73, 86)) { stopRun() }, weighted())
+        statusCard.addView(startStop)
+        body.addView(statusCard)
+
+        val projectCard = card()
+        projectCard.addView(label("PROJECT CONTROLS", 11f, muted, true))
+        projectCard.addView(label("Manage the loaded website", 18f, Color.WHITE, true))
+        projectCard.addView(actionButton("↑  Replace HTML File", panel2) { chooseHtml() })
+        projectCard.addView(actionButton("↻  Reload Website", panel2) { reloadWeb() })
+        projectCard.addView(actionButton("×  Close This Project", Color.rgb(87, 47, 61)) { closeProject() })
+        body.addView(projectCard)
+
+        val logsCard = card()
+        logsCard.addView(label("DIAGNOSTICS & LOGS", 11f, muted, true))
+        logsCard.addView(label("Network, JavaScript and page errors appear here.", 12f, muted, false))
+        errorPanel = TextView(this).apply {
+            text = "No errors reported yet."; setTextColor(0xffffb4ab.toInt()); textSize = 11f
+            setPadding(dp(10), dp(10), dp(10), dp(10)); background = rounded(Color.rgb(10, 16, 28), 10)
+            minHeight = dp(90)
+        }
+        logsCard.addView(errorPanel)
+        logsCard.addView(actionButton("Clear Logs", panel2) { errorPanel.text = "Logs cleared." })
+        body.addView(logsCard)
+
+        val note = label("TIP  •  Keep battery optimization settings in mind. Android may limit background work when the device is idle.", 11f, muted, false)
+        note.setPadding(dp(8), dp(8), dp(8), dp(14))
+        body.addView(note)
+        scroll.addView(body)
+        return LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(scroll) }
+    }
+
+    private fun showTab(showControls: Boolean) {
+        val show = if (showControls) controlsSection else webPageSection
+        val hide = if (showControls) webPageSection else controlsSection
+        if (show.visibility == View.VISIBLE) return
+        hide.animate().alpha(0f).translationX(if (showControls) -dp(18).toFloat() else dp(18).toFloat()).setDuration(130).withEndAction {
+            hide.visibility = View.GONE
+            show.alpha = 0f
+            show.translationX = if (showControls) dp(18).toFloat() else -dp(18).toFloat()
+            show.visibility = View.VISIBLE
+            show.animate().alpha(1f).translationX(0f).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
+        }.start()
+        styleTab(webTab, !showControls)
+        styleTab(controlsTab, showControls)
+        if (showControls) refreshStatus()
+    }
+
+    private fun styleTab(tab: TextView, selected: Boolean) {
+        tab.background = rounded(if (selected) accent else panel, 11)
+        tab.setTextColor(if (selected) Color.WHITE else muted)
+        tab.animate().scaleX(if (selected) 1f else .98f).scaleY(if (selected) 1f else .98f).setDuration(140).start()
+    }
+
+    private fun tabLabel(text: String, selected: Boolean) = TextView(this).apply {
+        this.text = text; gravity = Gravity.CENTER; textSize = 13f; typeface = Typeface.DEFAULT_BOLD
+        setTextColor(if (selected) Color.WHITE else muted); background = rounded(if (selected) accent else panel, 11)
+    }
+
+    private fun chooseHtml() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "text/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/html", "application/xhtml+xml"))
+        }
+        startActivityForResult(i, pickHtml)
+    }
+
+    @Deprecated("Activity result API retained for broad compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == pickHtml && resultCode == Activity.RESULT_OK) {
+            val uri = data?.data ?: return
+            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+            try {
+                val name = queryName(uri)
+                if (!name.lowercase().endsWith(".html") && !name.lowercase().endsWith(".htm")) {
+                    Toast.makeText(this, "Choose an .html or .htm file", Toast.LENGTH_LONG).show(); return
+                }
+                val code = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    ?: throw IllegalStateException("Empty file")
+                loadedName = name
+                projectName.text = name
+                editor.setText(code)
+                saveProject()
+                showTab(false)
+                web.loadDataWithBaseURL("https://appassets.androidplatform.net/user-content/", code, "text/html", "UTF-8", null)
+                Toast.makeText(this, "HTML file loaded", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) { showError("Unable to load HTML file: ${e.message}") }
+        }
+    }
+
+    private fun queryName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) return it.getString(0) ?: "project.html"
+        }
+        return "project.html"
+    }
+
+    private fun saveProject() {
+        prefs.edit().putString("html", editor.text.toString()).putString("name", loadedName ?: "pasted.html").apply()
+        projectName.text = loadedName ?: "pasted.html"
+    }
+
+    private fun runHtml() {
+        val code = editor.text.toString()
+        if (code.isBlank()) { showError("Add or upload an HTML document first."); showTab(false); return }
+        saveProject()
+        errorPanel.text = "No errors reported yet."
+        web.loadDataWithBaseURL("https://appassets.androidplatform.net/user-content/", code, "text/html", "UTF-8", null)
+        try {
+            RunnerService.start(this)
+            prefs.edit().putBoolean("sessionRequested", true).apply()
+            status.text = "Running — foreground session requested"
+            refreshStatus()
+            Toast.makeText(this, "Website started", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            status.text = "Preview running; background service unavailable"
+            addError("Background service could not start: ${e.message}")
+        }
+    }
+
+    private fun reloadWeb() {
+        if (!::web.isInitialized) return
+        if (editor.text.isNotBlank()) {
+            saveProject()
+            web.loadDataWithBaseURL("https://appassets.androidplatform.net/user-content/", editor.text.toString(), "text/html", "UTF-8", null)
+        } else web.reload()
+    }
+
+    private fun stopRun() {
+        RunnerService.stop(this)
+        if (::web.isInitialized) web.evaluateJavascript("window.stop();", null)
+        prefs.edit().putBoolean("sessionRequested", false).apply()
+        refreshStatus()
+        Toast.makeText(this, "Runner stopped", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun closeProject() {
+        stopRun()
+        editor.setText("")
+        loadedName = null
+        projectName.text = "No HTML file selected"
+        prefs.edit().clear().apply()
+        web.loadUrl("about:blank")
+        errorPanel.text = "No project loaded."
+        refreshStatus()
+        showTab(false)
+    }
+
+    private fun refreshStatus() {
+        if (!::status.isInitialized) return
+        val running = RunnerService.isRunning(this)
+        status.text = if (running) "Running — service active" else "Stopped"
+        status.setTextColor(if (running) mint else Color.WHITE)
+        statusDot.background = rounded(if (running) mint else muted, 50)
+        if (running) startPulse() else stopPulse()
+    }
+
+    private fun startPulse() {
+        if (pulseAnimator?.isRunning == true || !::statusDot.isInitialized) return
+        pulseAnimator = ValueAnimator.ofFloat(1f, .45f, 1f).apply {
+            duration = 1300; repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { statusDot.alpha = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun stopPulse() { pulseAnimator?.cancel(); pulseAnimator = null; if (::statusDot.isInitialized) statusDot.alpha = 1f }
+
+    private fun showError(message: String) {
+        if (::errorPanel.isInitialized) errorPanel.text = message
+        if (::controlsSection.isInitialized) showTab(true)
+    }
+    private fun addError(message: String) {
+        runOnUiThread {
+            if (::errorPanel.isInitialized) {
+                val old = errorPanel.text.toString().takeIf { it != "No errors reported yet." } ?: ""
+                errorPanel.text = (old + "\n" + message).trim().takeLast(1800)
+            }
+        }
+    }
+
+    override fun onResume() { super.onResume(); refreshStatus() }
+    override fun onDestroy() { saveProjectIfReady(); stopPulse(); super.onDestroy() }
+    private fun saveProjectIfReady() { if (::editor.isInitialized) saveProject() }
+
+    private fun card(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(14), dp(14), dp(14), dp(14))
+        background = rounded(panel, 16)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) }
+    }
+
+    private fun label(text: String, size: Float, color: Int, bold: Boolean) = TextView(this).apply {
+        this.text = text; textSize = size; setTextColor(color)
+        if (bold) typeface = Typeface.DEFAULT_BOLD
+        setPadding(0, dp(3), 0, dp(7))
+    }
+
+    private fun actionButton(text: String, color: Int, action: () -> Unit): TextView = TextView(this).apply {
+        this.text = text; textSize = 12f; typeface = Typeface.DEFAULT_BOLD
+        setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        setPadding(dp(10), dp(12), dp(10), dp(12)); background = rounded(color, 11)
+        isClickable = true; isFocusable = true
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(3), dp(7), dp(3), dp(3)) }
+        setOnClickListener {
+            AnimatorSet().apply {
+                playTogether(ObjectAnimator.ofFloat(this@apply, "scaleX", 1f, 0.96f, 1f), ObjectAnimator.ofFloat(this@apply, "scaleY", 1f, 0.96f, 1f))
+                duration = 170; start()
+            }
+            action()
+        }
+    }
+
+    private fun weighted() = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(2), dp(3), dp(2), dp(2)) }
+    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
+    private fun strokeBg(color: Int, radius: Int) = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = dp(radius).toFloat(); setStroke(dp(1), color) }
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+}
